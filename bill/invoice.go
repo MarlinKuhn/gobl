@@ -196,14 +196,15 @@ func (inv *Invoice) Empty() {
 	inv.Payment.ResetAdvances()
 }
 
-// Calculate performs all the calculations required for the invoice totals and taxes. If the original
-// invoice only includes partial calculations, this will figure out what's missing.
+// Calculate performs all the calculations and normalizations required for the invoice
+// totals and taxes. If the original invoice only includes partial calculations, this
+// will figure out what's missing.
 func (inv *Invoice) Calculate() error {
 	if inv.Type == cbc.KeyEmpty {
 		inv.Type = InvoiceTypeStandard
 	}
 	if inv.Supplier == nil {
-		return errors.New("missing or invalid supplier tax identity")
+		return errors.New("missing supplier")
 	}
 	if err := inv.Supplier.Calculate(); err != nil {
 		return fmt.Errorf("supplier: %w", err)
@@ -214,14 +215,23 @@ func (inv *Invoice) Calculate() error {
 		}
 	}
 
+	// Preceding entries
+	if inv.Preceding != nil {
+		for _, p := range inv.Preceding {
+			if err := p.Calculate(); err != nil {
+				return err
+			}
+		}
+	}
+
 	if err := inv.prepareTagsAndScenarios(); err != nil {
 		return err
 	}
 
-	// Should we use the customers identity for calculations?
-	tID := inv.determineTaxIdentity()
-	if tID == nil {
-		return errors.New("unable to determine tax identity")
+	// Should we use the customer's identity for calculations?
+	tID, err := inv.determineTaxIdentity()
+	if err != nil {
+		return err
 	}
 	r := tax.RegimeFor(tID.Country, tID.Zone)
 	if r == nil {
@@ -233,7 +243,7 @@ func (inv *Invoice) Calculate() error {
 		return err
 	}
 
-	return inv.calculate(r, tID)
+	return inv.calculateWithRegime(r, tID)
 }
 
 // RemoveIncludedTaxes is a special function that will go through all prices which may include
@@ -363,7 +373,8 @@ func (inv *Invoice) prepareTagsAndScenarios() error {
 	return nil
 }
 
-func (inv *Invoice) calculate(r *tax.Regime, tID *tax.Identity) error {
+func (inv *Invoice) calculateWithRegime(r *tax.Regime, tID *tax.Identity) error {
+	// Normalize data
 	if inv.IssueDate.IsZero() {
 		inv.IssueDate = cal.TodayIn(r.TimeLocation())
 	}
@@ -498,19 +509,25 @@ func calculateComplements(comps []*schema.Object) error {
 	return nil
 }
 
-func (inv *Invoice) determineTaxIdentity() *tax.Identity {
+func (inv *Invoice) determineTaxIdentity() (*tax.Identity, error) {
 	if inv.Tax != nil {
 		if inv.Tax.ContainsTag(tax.TagCustomerRates) {
 			if inv.Customer == nil {
-				return nil
+				return nil, fmt.Errorf("missing customer for %s", tax.TagCustomerRates.String())
 			}
-			return inv.Customer.TaxID
+			if inv.Customer.TaxID == nil {
+				return nil, fmt.Errorf("missing customer tax ID for %s", tax.TagCustomerRates.String())
+			}
+			return inv.Customer.TaxID, nil
 		}
 	}
 	if inv.Supplier == nil {
-		return nil
+		return nil, errors.New("missing supplier")
 	}
-	return inv.Supplier.TaxID
+	if inv.Supplier.TaxID == nil {
+		return nil, errors.New("missing supplier tax ID")
+	}
+	return inv.Supplier.TaxID, nil
 }
 
 func taxRegimeFor(party *org.Party) *tax.Regime {

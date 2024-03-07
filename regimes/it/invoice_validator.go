@@ -63,7 +63,8 @@ func (v *invoiceValidator) supplier(value interface{}) error {
 			tax.IdentityTypeIn(TaxIdentityTypeBusiness, TaxIdentityTypeGovernment),
 		),
 		validation.Field(&supplier.Addresses,
-			validation.By(validateAddress),
+			validation.Required,
+			validation.Each(validation.By(validateAddress)),
 		),
 		validation.Field(&supplier.Registration,
 			validation.By(validateRegistration),
@@ -95,7 +96,7 @@ func (v *invoiceValidator) customer(value interface{}) error {
 			validation.When(
 				isItalianParty(customer),
 				// TODO: address not required for simplified invoices
-				validation.By(validateAddress),
+				validation.Each(validation.By(validateAddress)),
 			),
 		),
 	)
@@ -109,15 +110,14 @@ func isItalianParty(party *org.Party) bool {
 }
 
 func validateAddress(value interface{}) error {
-	v, ok := value.([]*org.Address)
+	v, ok := value.(*org.Address)
 	if v == nil || !ok {
 		return nil
 	}
 	// Post code and street in addition to the locality are required in Italian invoices.
-	address := v[0]
-	return validation.ValidateStruct(address,
-		validation.Field(&address.Street, validation.Required),
-		validation.Field(&address.Code, validation.Required),
+	return validation.ValidateStruct(v,
+		validation.Field(&v.Street, validation.Required),
+		validation.Field(&v.Code, validation.Required),
 	)
 }
 
@@ -128,6 +128,7 @@ func validateLine(value interface{}) error {
 	}
 	return validation.ValidateStruct(v,
 		validation.Field(&v.Taxes,
+			tax.SetHasCategory(tax.CategoryVAT),
 			validation.Each(
 				validation.By(validateLineTax),
 				validation.Skip,
@@ -152,7 +153,7 @@ func validateLineTax(value interface{}) error {
 					TaxCategoryENASARCO,
 					TaxCategoryENPAM,
 				),
-				tax.ExtMapRequires(
+				tax.ExtensionsRequires(
 					ExtKeySDIRetainedTax,
 				),
 			),

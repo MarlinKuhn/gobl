@@ -12,26 +12,31 @@ import (
 // invoiceValidator adds validation checks to invoices which are relevant
 // for the region.
 type invoiceValidator struct {
-	inv *bill.Invoice
+	inv  *bill.Invoice
+	zone l10n.Code
 }
 
 func validateInvoice(inv *bill.Invoice) error {
 	v := &invoiceValidator{inv: inv}
+
+	if inv.Supplier != nil && inv.Supplier.TaxID != nil {
+		v.zone = inv.Supplier.TaxID.Zone
+	}
+
 	return v.validate()
 }
 
 func (v *invoiceValidator) validate() error {
 	inv := v.inv
 	return validation.ValidateStruct(inv,
-		validation.Field(&inv.Currency, validation.In(currency.EUR)),
-		// Only commercial and simplified supported at this time for spain.
-		// Rectification state determined by Preceding value.
-		validation.Field(&inv.Type, validation.In(
-			bill.InvoiceTypeStandard,
-			bill.InvoiceTypeCorrective,
-			bill.InvoiceTypeProforma,
-		)),
+		validation.Field(&inv.Currency,
+			validation.In(currency.EUR),
+		),
 		validation.Field(&inv.Preceding,
+			validation.When(
+				v.zone.In(ZonesBasqueCountry...) && inv.Type.In(correctionTypes...),
+				validation.Required,
+			),
 			validation.Each(validation.By(v.preceding)),
 			validation.Skip,
 		),
@@ -92,16 +97,15 @@ func (v *invoiceValidator) preceding(value interface{}) error {
 	if obj == nil {
 		return nil
 	}
-	return validation.ValidateStruct(obj,
-		validation.Field(&obj.Changes,
-			validation.Required,
-			validation.Each(isValidCorrectionChangeKey),
-		),
-		validation.Field(&obj.CorrectionMethod,
-			validation.Required,
-			isValidCorrectionMethodKey,
-		),
-	)
+
+	if v.zone.In(ZonesBasqueCountry...) {
+		return validation.ValidateStruct(obj,
+			validation.Field(&obj.IssueDate, validation.Required),
+			validation.Field(&obj.Ext, tax.ExtensionsRequires(ExtKeyTBAICorrection)),
+		)
+	}
+
+	return nil
 }
 
 func (v *invoiceValidator) validateLine(value interface{}) error {
@@ -125,16 +129,11 @@ func (v *invoiceValidator) validateLineTax(value interface{}) error {
 	if obj == nil || !ok {
 		return nil
 	}
-	zone := l10n.CodeEmpty
-	if v.inv.Supplier != nil && v.inv.Supplier.TaxID != nil {
-		zone = v.inv.Supplier.TaxID.Zone
-	}
 	return validation.ValidateStruct(obj,
 		validation.Field(&obj.Ext,
 			validation.When(
-				zone.In(ZonesBasqueCountry...) &&
-					obj.Rate == tax.RateExempt,
-				tax.ExtMapRequires(ExtKeyTBAIExemption),
+				v.zone.In(ZonesBasqueCountry...) && obj.Rate == tax.RateExempt,
+				tax.ExtensionsRequires(ExtKeyTBAIExemption),
 			),
 			validation.Skip,
 		),

@@ -47,6 +47,22 @@ func TestUUIDIsZero(t *testing.T) {
 	assert.False(t, u1.IsZero())
 }
 
+func TestNormalizeUUID(t *testing.T) {
+	var u *uuid.UUID
+	u2 := uuid.Normalize(u)
+	assert.Nil(t, u2)
+
+	u = &uuid.UUID{}
+	assert.Equal(t, "00000000-0000-0000-0000-000000000000", u.String())
+
+	u2 = uuid.Normalize(u)
+	assert.Nil(t, u2)
+
+	u3 := uuid.MustParse("03907310-8daa-11eb-8dcd-0242ac130003")
+	u2 = uuid.Normalize(&u3)
+	assert.Equal(t, u3.String(), u2.String())
+}
+
 func TestUUIDJSON(t *testing.T) {
 	v1s := "03907310-8daa-11eb-8dcd-0242ac130003"
 	type testJSON struct {
@@ -78,4 +94,20 @@ func TestUUIDJSON(t *testing.T) {
 	if v2.ID.String() != v1s {
 		t.Errorf("did not get same string back, got: %v", v2.ID.String())
 	}
+}
+
+func TestUUIDv3(t *testing.T) {
+	ns := uuid.MustParse("0654a3f4-8ad5-44c8-828e-c25f7ccd6550")
+	u := uuid.NewV3(ns, []byte("hello, world"))
+
+	assert.Equal(t, 3, int(u.Version()))
+	assert.Equal(t, "61cfb897-b1bb-382b-bab9-a7ba465a27fa", u.String())
+}
+
+func TestUUIDv5(t *testing.T) {
+	ns := uuid.MustParse("0654a3f4-8ad5-44c8-828e-c25f7ccd6550")
+	u := uuid.NewV5(ns, []byte("hello, world"))
+
+	assert.Equal(t, 5, int(u.Version()))
+	assert.Equal(t, "1f53a310-2a17-5acb-b76a-c39495e5356f", u.String())
 }

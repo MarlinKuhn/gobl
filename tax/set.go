@@ -29,7 +29,7 @@ type Combo struct {
 	// Some countries require an additional surcharge (calculated if rate present).
 	Surcharge *num.Percentage `json:"surcharge,omitempty" jsonschema:"title=Surcharge" jsonschema_extras:"calculated=true"`
 	// Local codes that apply for a given rate or percentage that need to be identified and validated.
-	Ext ExtMap `json:"ext,omitempty" jsonschema:"title=Ext"`
+	Ext Extensions `json:"ext,omitempty" jsonschema:"title=Ext"`
 
 	// Internal link back to the category object
 	category *Category
@@ -53,7 +53,7 @@ func (c *Combo) ValidateWithContext(ctx context.Context) error {
 			r.InCategoryRates(c.Category),
 		),
 		validation.Field(&c.Ext,
-			ExtMapHas(combineExtKeys(cat, rate)...),
+			ExtensionsHas(combineExtKeys(cat, rate)...),
 			validation.When(
 				(cat != nil && len(cat.Extensions) == 0) &&
 					(rate != nil && len(rate.Extensions) == 0),
@@ -74,6 +74,15 @@ func (c *Combo) ValidateWithContext(ctx context.Context) error {
 		return err
 	}
 	return r.ValidateObject(c)
+}
+
+// NormalizeCombo tries to normalize the data inside the tax combo.
+func NormalizeCombo(c *Combo) *Combo {
+	if c == nil {
+		return nil
+	}
+	c.Ext = NormalizeExtensions(c.Ext)
+	return c
 }
 
 func combineExtKeys(cat *Category, rate *Rate) []cbc.Key {
@@ -133,7 +142,7 @@ func (c *Combo) prepare(r *Regime, zone l10n.Code, date cal.Date) error {
 // the rate field.
 func (c *Combo) UnmarshalJSON(data []byte) error {
 	type Alias Combo
-	aux := &struct {
+	aux := struct {
 		*Alias
 		Tags []cbc.Key `json:"tags"`
 	}{
@@ -146,6 +155,26 @@ func (c *Combo) UnmarshalJSON(data []byte) error {
 		c.Rate = aux.Tags[0]
 	}
 	return nil
+}
+
+// NormalizeSet tries to normalize the tax set by normalizing combos
+// and returning nil if empty.
+func NormalizeSet(s Set) Set {
+	if s == nil {
+		return nil
+	}
+	ns := make(Set, 0)
+	for _, c := range s {
+		c = NormalizeCombo(c)
+		if c == nil {
+			continue
+		}
+		ns = append(ns, c)
+	}
+	if len(ns) == 0 {
+		return nil
+	}
+	return ns
 }
 
 // ValidateWithContext ensures the set of tax combos looks correct
@@ -199,4 +228,26 @@ func (s Set) Rate(cat cbc.Code) cbc.Key {
 		}
 	}
 	return ""
+}
+
+type setValidation struct {
+	categories []cbc.Code
+}
+
+// SetHasCategory validates that the set contains the given category.
+func SetHasCategory(categories ...cbc.Code) validation.Rule {
+	return &setValidation{categories: categories}
+}
+
+func (sv *setValidation) Validate(value interface{}) error {
+	s, ok := value.(Set)
+	if !ok {
+		return nil
+	}
+	for _, c := range sv.categories {
+		if s.Get(c) == nil {
+			return fmt.Errorf("missing category %s", c.String())
+		}
+	}
+	return nil
 }

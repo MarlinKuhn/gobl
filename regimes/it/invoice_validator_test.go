@@ -117,6 +117,15 @@ func TestSupplierValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "type: must be a valid value")
 }
 
+func TestSupplierAddressesValidation(t *testing.T) {
+	inv := testInvoiceStandard(t)
+	inv.Supplier.Addresses = nil
+	require.NoError(t, inv.Calculate())
+	err := inv.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "addresses: cannot be blank.")
+}
+
 func TestRetainedTaxesValidation(t *testing.T) {
 	inv := testInvoiceStandard(t)
 	inv.Lines[0].Taxes = append(inv.Lines[0].Taxes, &tax.Combo{
@@ -132,11 +141,26 @@ func TestRetainedTaxesValidation(t *testing.T) {
 	inv = testInvoiceStandard(t)
 	inv.Lines[0].Taxes = append(inv.Lines[0].Taxes, &tax.Combo{
 		Category: "IRPEF",
-		Ext: tax.ExtMap{
+		Ext: tax.Extensions{
 			it.ExtKeySDIRetainedTax: "A",
 		},
 		Percent: num.NewPercentage(20, 2),
 	})
 	require.NoError(t, inv.Calculate())
 	require.NoError(t, inv.Validate())
+}
+
+func TestInvoiceLineTaxes(t *testing.T) {
+	inv := testInvoiceStandard(t)
+	inv.Lines = append(inv.Lines, &bill.Line{
+		Quantity: num.MakeAmount(10, 0),
+		Item: &org.Item{
+			Name:  "Test Item",
+			Price: num.MakeAmount(10000, 2),
+		},
+		// No taxes!
+	})
+	require.NoError(t, inv.Calculate())
+	err := inv.Validate()
+	require.EqualError(t, err, "lines: (1: (taxes: missing category VAT.).).")
 }

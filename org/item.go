@@ -30,7 +30,7 @@ type Item struct {
 	// Special key used to classify the item sometimes required by some regimes.
 	Key cbc.Key `json:"key,omitempty" jsonschema:"title=Key"`
 	// Brief name of the item
-	Name string `json:"name"`
+	Name string `json:"name" jsonschema:"title=Name"`
 	// List of additional codes, IDs, or SKUs which can be used to identify the item. They should be agreed upon between supplier and customer.
 	Identities []*Identity `json:"identities,omitempty" jsonschema:"title=Identities"`
 	// Detailed description of the item.
@@ -44,7 +44,7 @@ type Item struct {
 	// Country code of where this item was from originally.
 	Origin l10n.CountryCode `json:"origin,omitempty" jsonschema:"title=Country of Origin"`
 	// Extension code map for any additional regime specific codes that may be required.
-	Ext tax.ExtMap `json:"ext,omitempty" jsonschema:"title=Ext"`
+	Ext tax.Extensions `json:"ext,omitempty" jsonschema:"title=Ext"`
 	// Additional meta information that may be useful
 	Meta cbc.Meta `json:"meta,omitempty" jsonschema:"title=Meta"`
 }
@@ -52,6 +52,12 @@ type Item struct {
 // Validate checks that the Item looks okay.
 func (i *Item) Validate() error {
 	return i.ValidateWithContext(context.Background())
+}
+
+// Calculate performs any required calculations on the Item.
+func (i *Item) Calculate() error {
+	i.Ext = tax.NormalizeExtensions(i.Ext)
+	return nil
 }
 
 // ValidateWithContext checks that the Item looks okay inside the provided context.
