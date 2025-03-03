@@ -7,6 +7,7 @@ import (
 
 	"github.com/invopop/gobl/cbc"
 	"github.com/invopop/gobl/currency"
+	"github.com/invopop/gobl/l10n"
 	"github.com/invopop/gobl/num"
 	"github.com/invopop/gobl/org"
 	"github.com/invopop/gobl/tax"
@@ -48,7 +49,7 @@ func (l *Line) GetTaxes() tax.Set {
 
 // GetTotal provides the final total for this line, excluding any tax calculations.
 func (l *Line) GetTotal() num.Amount {
-	return l.Total
+	return l.total
 }
 
 // ValidateWithContext ensures the line contains everything required using
@@ -216,11 +217,24 @@ func calculateLines(lines []*Line, cur currency.Code, rates []*currency.Exchange
 	return nil
 }
 
-func calculateLineSum(lines []*Line, cur currency.Code) num.Amount {
+func calculateLineSum(country l10n.TaxCountryCode, lines []*Line, cur currency.Code, zero num.Amount) num.Amount {
 	sum := cur.Def().Zero()
 	for _, l := range lines {
-		sum = sum.MatchPrecision(l.total)
+		sum = matchPrecision(country, zero, sum, l.Total)
 		sum = sum.Add(l.total)
 	}
 	return sum
+}
+
+// matchPrecision is used to match the precision of two amounts according to the
+// current rounding rule.
+func matchPrecision(country l10n.TaxCountryCode, zero, a, b num.Amount) num.Amount {
+	r := tax.RegimeDefFor(country.Code())
+	if r != nil {
+		switch r.CalculatorRoundingRule {
+		case tax.CalculatorRoundThenSum:
+			return a.Rescale(zero.Exp())
+		}
+	}
+	return a.MatchPrecision(b)
 }

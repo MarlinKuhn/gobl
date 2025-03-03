@@ -430,7 +430,7 @@ func (inv *Invoice) calculate() error {
 	if err := calculateLines(inv.Lines, inv.Currency, inv.ExchangeRates); err != nil {
 		return validation.Errors{"lines": err}
 	}
-	t.Sum = calculateLineSum(inv.Lines, inv.Currency)
+	t.Sum = calculateLineSum(inv.Regime.Country, inv.Lines, inv.Currency, zero)
 	t.Total = t.Sum
 
 	// Discount Lines
