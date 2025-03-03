@@ -100,6 +100,7 @@ func (l *Line) calculate(cur currency.Code, rates []*currency.ExchangeRate) erro
 
 	// Calculate the line sum and total
 	l.Sum = price.Multiply(l.Quantity)
+	l.total = l.Sum
 
 	for _, d := range l.Discounts {
 		if d.Percent != nil && !d.Percent.IsZero() {
