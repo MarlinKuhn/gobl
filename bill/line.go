@@ -48,7 +48,7 @@ func (l *Line) GetTaxes() tax.Set {
 
 // GetTotal provides the final total for this line, excluding any tax calculations.
 func (l *Line) GetTotal() num.Amount {
-	return l.total
+	return l.Total
 }
 
 // ValidateWithContext ensures the line contains everything required using
@@ -100,7 +100,6 @@ func (l *Line) calculate(cur currency.Code, rates []*currency.ExchangeRate) erro
 
 	// Calculate the line sum and total
 	l.Sum = price.Multiply(l.Quantity)
-	l.total = l.Sum
 
 	for _, d := range l.Discounts {
 		if d.Percent != nil && !d.Percent.IsZero() {

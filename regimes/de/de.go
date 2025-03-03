@@ -31,7 +31,8 @@ func New() *tax.RegimeDef {
 		Scenarios: []*tax.ScenarioSet{
 			invoiceScenarios,
 		},
-		Identities: identityDefinitions, // identities.go
+		CalculatorRoundingRule: tax.CalculatorRoundThenSum,
+		Identities:             identityDefinitions, // identities.go
 		Corrections: []*tax.CorrectionDefinition{
 			{
 				Schema: bill.ShortSchemaInvoice,
